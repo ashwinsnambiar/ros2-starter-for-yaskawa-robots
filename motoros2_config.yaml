@@ -1,8 +1,8 @@
 ---
-# SPDX-FileCopyrightText: 2022, Yaskawa America, Inc.
-# SPDX-FileCopyrightText: 2022, Delft University of Technology
+# SPDX-FileCopyrightText: 2022-2023, Yaskawa America, Inc.
+# SPDX-FileCopyrightText: 2022-2023, Delft University of Technology
 #
-# SPDX-License-Identifier: BSD-3-Clause
+# SPDX-License-Identifier: Apache-2.0
 
 
 #-----------------------------------------------------------------------------
@@ -11,7 +11,7 @@
 # to/from MotoROS2 will route through the Agent application.
 # (There is no default value for these fields. They must be specified by
 # the user.)
-agent_ip_address: 192.168.255.10
+agent_ip_address: "10.10.4.64"
 agent_port_number: 8888
 
 
@@ -31,13 +31,13 @@ agent_port_number: 8888
 # Name under which MotoROS2 should register with the ROS 2 node graph.
 #
 # DEFAULT: "motoman_xx_yy_zz"  (xyz: last three bytes of robot's MAC address)
-node_name: motoman_ros2
+node_name: "motoman_sia20f"
 
 #-----------------------------------------------------------------------------
 # Namespace to use for the MotoROS2 node and all topics.
 #
 # DEFAULT: ""  (empty string)
-node_namespace: "yaskawa"
+node_namespace: "virero"
 
 #-----------------------------------------------------------------------------
 # Remap rules to apply to ROS 2 resource names.
@@ -47,6 +47,9 @@ node_namespace: "yaskawa"
 # The current implementation expects all remap rules as a single,
 # space-separated string. Whitespace in resource names is not allowed, so
 # this should not pose any issues.
+#
+# Maximum total length of the remap_rules string: 255 chars. Any characters
+# beyond that will be ignored (and likely result in parsing failures).
 #
 # Please refer to the ROS 2 documentation on remapping for more information
 # on syntax and contraints.
@@ -66,6 +69,59 @@ node_namespace: "yaskawa"
 #
 # DEFAULT: true
 sync_timeclock_with_agent: true
+
+#-----------------------------------------------------------------------------
+# Should MotoROS2 monitor the link state of the ethernet port used to
+# communicate with the Agent?
+#
+# If enabled, this will cause immediate notification of loss-of-connection
+# when the link goes down, causing MotoROS2 to activate it's shutdown
+# behaviour (ie: stop all motion (if enabled), release resources, wait for
+# link up and attempt reconnection with the Agent).
+#
+# If this is disabled, Agent disconnection detection uses an application
+# layer based timeout mechanism which takes longer to detect disconnects (but
+# might be more robust against intermittent link-layer disconnects which do not
+# cause network disconnections).
+#
+# DEFAULT: true
+#userlan_monitor_enabled: true
+
+#-----------------------------------------------------------------------------
+# Which port should MotoROS2 monitor, if 'userlan_monitor_enabled' is 'true'?
+#
+# If not specified, MotoROS2 will attempt to auto-detect the network port
+# that is used to connect to the micro-ROS Agent. It will do this by
+# comparing the 'agent_ip_address' setting against the IP addresses (and
+# netmasks) of all available network interfaces.
+#
+# If the Agent can be reached directly over a particular interface, or via a
+# configured default gateway on the same interface, the associated port will be
+# monitored for link drops.
+#
+# To disable auto-detection, uncomment 'userlan_monitor_port' below and set
+# it to the desired port.
+#
+# NOTE:   this setting only applies to YRC1000 controllers. YRC1000u, DX200,
+#         and FS100 controllers only have a single ethernet port, and any
+#         value other than 1 will be ignored.
+#
+# NOTE 2: auto-detection is not perfect. It can't determine whether the Agent
+#         might be reachable using multiple hops. Nor can it determine whether
+#         any routers have been configured to forward particular types of
+#         traffic or firewalls exist between MotoROS2 and the micro-ROS Agent.
+#         For deployments with complex network configurations, disable
+#         auto-detection by configuring 'userlan_monitor_port' below.
+#
+# NOTE 3: the port specified here is NOT checked against 'agent_ip_address'.
+#         In other words: if 'agent_ip_address' is on 'USER_LAN1', but
+#         'userlan_monitor_port' is set to 'USER_LAN2', MotoROS2 will detect
+#         link down events on 'USER_LAN2', whether or not that port is used
+#         to communicate with the Agent.
+#
+# OPTIONS: USER_LAN1, USER_LAN2
+# DEFAULT: USER_LAN1
+#userlan_monitor_port: USER_LAN1
 
 #-----------------------------------------------------------------------------
 # If the Agent PC disconnects from the robot while it is in motion, should the
@@ -121,11 +177,14 @@ namespace_tf: true
 # When using a 7 axis robot arm with an elbow joint (E) in the middle of the
 # arm, the elbow axis should be listed last (SLURBTE).
 #
-# DEFAULT: "group_x/joint_y"
+# DEFAULT:
+# - Single-group: "joint_M"
+# - Multi-group: "group_N/joint_M"
+#joint_names:
+#- [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
 
 joint_names:
-  - [joint_1, joint_2, joint_3,
-     joint_4, joint_5, joint_6]
+- ['joint_1_s', 'joint_2_l', 'joint_3_e', 'joint_4_u', 'joint_5_r', 'joint_6_b', 'joint_7_t']
 
 #-----------------------------------------------------------------------------
 # Logging settings
@@ -152,7 +211,10 @@ update_periods:
   # number will result in quicker responsiveness to received messages.
   # Additionally, it determines the rate at which the feedback_publisher timers
   # are checked.
-  # This value should be <= to feedback_publisher_period.
+  # This value should be <= to action_feedback_publisher_period as executor_sleep_period
+  # is the rate at which the action-feedback timer is checked. If the value for
+  # action_feedback_publisher_period is < executor_sleep_period, it will effectively
+  # be treated as having the same value executor_sleep_period at runtime.
   #
   # DEFAULT: 10 milliseconds
   executor_sleep_period: 10
@@ -160,16 +222,16 @@ update_periods:
   # The delay between each publish of feedback position and status information.
   # A lower number will publish the feedback data more frequently.
   # This value should be >= to executor_sleep_period and
-  # controller_io_status_monitor_period.
+  # controller_status_monitor_period.
   #
   # DEFAULT: 20 milliseconds
-  feedback_publisher_period: 20
+  action_feedback_publisher_period: 20
 
-  # The delay between each poll of the robot I/O and feedback data.
-  # This value should be <= to feedback_publisher_period.
+  # The delay between each poll of the robot I/O and controller status data.
+  # This value should be <= to action_feedback_publisher_period.
   #
   # DEFAULT: 10 milliseconds
-  controller_io_status_monitor_period: 10
+  controller_status_monitor_period: 10
 
 #-----------------------------------------------------------------------------
 # QoS profile to use for various publishers MotoROS2 creates.
@@ -183,8 +245,7 @@ publisher_qos:
   robot_status: sensor_data
 
   # DEFAULT: sensor_data
-  #joint_states: sensor_data
-  joint_states: default
+  joint_states: sensor_data
 
   # DEFAULT: default
   tf: default
@@ -218,3 +279,51 @@ publisher_qos:
 #
 # DEFAULT: false
 #allow_custom_inform: false
+
+#-----------------------------------------------------------------------------
+# Ignore missing calibration data on multi-group systems with TF broadcast
+# enabled.
+#
+# MotoROS2 will raise an alarm (8013[16]) on a multi-group controller if it
+# is unable to load any calibration data and broadcasting of TF frames is
+# enabled.
+# This calibration data is needed to correctly disambiguate multiple distinct
+# TF trees which would otherwise potentially (partially) overlap each other.
+#
+# Set this flag to 'true' to prevent the alarm from being raised, for instance
+# in cases where uncalibrated multi-group systems should still broadcast TF.
+#
+# DEFAULT: false
+#ignore_missing_calib_data: false
+
+#-----------------------------------------------------------------------------
+# Should MotoROS2 broadcast debug messages?
+#
+# If enabled, this will broadcast log messages on the network on port UDP 21789.
+# The user can use the debug script to monitor the state of the robot, identify
+# problems, and debug their code.
+#
+# The debug script is available under the Yaskawa-Global/motoros2 repository in
+# the tools directory
+# https://github.com/Yaskawa-Global/motoros2/tree/main/tools
+#
+# DEFAULT: true
+#debug_broadcast_enabled: true
+
+#-----------------------------------------------------------------------------
+# Which network port(s) should MotoROS2 broadcast debug messages on, if
+# 'debug_broadcast_enabled' is 'true'?
+#
+# If not specified and 'debug_broadcast_enabled' is true, MotoROS2 will
+# send messages over all network ports which are active on the controller.
+#
+# To choose a specific port to broadcast debug messages, uncomment
+# 'debug_broadcast_port' below and set it to the desired port.
+#
+# NOTE 1:   this setting only applies to YRC1000 controllers. YRC1000u,
+#         DX200, and FS100 controllers only have a single ethernet port,
+#         and will always default to USER_LAN1
+#
+# OPTIONS: USER_LAN1, USER_LAN2
+# DEFAULT: (all available network ports)
+#debug_broadcast_port: USER_LAN1
