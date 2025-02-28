@@ -11,7 +11,7 @@
 # to/from MotoROS2 will route through the Agent application.
 # (There is no default value for these fields. They must be specified by
 # the user.)
-agent_ip_address: "10.10.4.64"
+agent_ip_address: 10.10.4.64
 agent_port_number: 8888
 
 
@@ -31,13 +31,13 @@ agent_port_number: 8888
 # Name under which MotoROS2 should register with the ROS 2 node graph.
 #
 # DEFAULT: "motoman_xx_yy_zz"  (xyz: last three bytes of robot's MAC address)
-node_name: "motoman_sia20f"
+node_name: motoman_sia20f
 
 #-----------------------------------------------------------------------------
 # Namespace to use for the MotoROS2 node and all topics.
 #
 # DEFAULT: ""  (empty string)
-node_namespace: "virero"
+node_namespace: virero
 
 #-----------------------------------------------------------------------------
 # Remap rules to apply to ROS 2 resource names.
@@ -184,7 +184,7 @@ namespace_tf: true
 #- [joint_1, joint_2, joint_3, joint_4, joint_5, joint_6]
 
 joint_names:
-- ['joint_1_s', 'joint_2_l', 'joint_3_e', 'joint_4_u', 'joint_5_r', 'joint_6_b', 'joint_7_t']
+  - [joint_1_s, joint_2_l, joint_3_e, joint_4_u, joint_5_r, joint_6_b, joint_7_t]
 
 #-----------------------------------------------------------------------------
 # Logging settings
